@@ -1,6 +1,6 @@
 use clap::{Arg, Command};
 use image::{ImageBuffer, DynamicImage, imageops, io::Reader};
-use indicatif::{ParallelProgressIterator, ProgressBar};
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
 fn main() {
@@ -38,9 +38,12 @@ fn main() {
     let columns = matches.value_of("columns").map(| columns | columns.parse::<u32>().unwrap()).unwrap_or(1);
     let inputs: Vec::<&str> = matches.values_of("inputs").expect("No input files specified").collect();
 
-    println!("Loading input images...");
+    let bar_style = ProgressStyle::default_bar().template("[{spinner}] [{pos}]/[{len}] {msg}");
+    let spinner_style = ProgressStyle::default_bar().template("[{spinner}] {msg}");
 
-    let input_files: Vec::<DynamicImage> = inputs.par_iter().progress_count(inputs.len() as u64)
+    let loading_progress = ProgressBar::new(inputs.len() as u64).with_message("Loading input images").with_style(bar_style.clone());
+
+    let input_files: Vec::<DynamicImage> = inputs.par_iter().progress_with(loading_progress)
         .map(|input| -> DynamicImage {
             Reader::open(input)
                 .expect("Failed to open file.")
@@ -64,9 +67,7 @@ fn main() {
     let mut x = 0 as i64;
     let mut y = 0 as i64;
 
-    println!("Merging images...");
-
-    let merging_progress = ProgressBar::new(input_files.len() as u64);
+    let merging_progress = ProgressBar::new(input_files.len() as u64).with_message("Merging images").with_style(bar_style);
 
     for input in &input_files {
         imageops::replace(&mut output_image, input, x * largest_width, y * largest_height);
@@ -80,7 +81,10 @@ fn main() {
 
     merging_progress.finish_and_clear();
 
-    println!("Writing output...");
+    let saving_progress = ProgressBar::new_spinner().with_message("Writing output").with_style(spinner_style);
+    saving_progress.enable_steady_tick(15);
 
-    output_image.save(output).expect("Unable to write to output!");
+    output_image.save(output).unwrap();
+
+    saving_progress.finish_with_message("Done!");
 }
