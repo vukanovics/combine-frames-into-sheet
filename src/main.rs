@@ -3,6 +3,14 @@ use image::{ImageBuffer, DynamicImage, imageops, io::Reader};
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
+fn nearest_square(num: u32) -> u32 {
+    let mut result: u32 = 0;
+    while (result * result) < num {
+        result = result + 1;
+    }
+    return result;
+}
+
 fn main() {
     let matches = Command::new("Combine frames into sheet")
         .version("0.1.0")
@@ -34,9 +42,39 @@ fn main() {
         .get_matches();
 
     let output = matches.value_of("output").expect("No output specified");
-    let rows = matches.value_of("rows").map(| rows | rows.parse::<u32>().unwrap()).unwrap_or(1);
-    let columns = matches.value_of("columns").map(| columns | columns.parse::<u32>().unwrap()).unwrap_or(1);
-    let inputs: Vec::<&str> = matches.values_of("inputs").expect("No input files specified").collect();
+    let rows_option = matches
+        .value_of("rows")
+        .map(|rows| rows.parse::<u32>().unwrap());
+    let columns_option = matches
+        .value_of("columns")
+        .map(|columns| columns.parse::<u32>().unwrap());
+
+    let inputs: Vec<&str> = matches
+        .values_of("inputs")
+        .expect("No input files specified")
+        .collect();
+
+    let rows = rows_option.unwrap_or_else(|| {
+        if columns_option.is_some() {
+            let rows = inputs.len() as u32 / columns_option.unwrap();
+            println!("Number of rows not specified, using number of inputs divided by number of columns: {rows}");
+            rows
+        } else {
+            let rows = nearest_square(inputs.len() as u32);
+            println!("Number of rows not specified, using the square nearest to the number of inputs: {rows}");
+            rows
+        }});
+
+    let columns = columns_option.unwrap_or_else(|| {
+        if rows_option.is_some() {
+            let columns = inputs.len() as u32 / rows_option.unwrap();
+            println!("Number of columns not specified, using number of inputs divided by number of rows: {columns}");
+            columns
+        } else {
+            let columns = nearest_square(inputs.len() as u32);
+            println!("Number of columns not specified, using the square nearest to the number of inputs: {columns}");
+            columns
+        }});
 
     let bar_style = ProgressStyle::default_bar().template("[{spinner}] [{pos}]/[{len}] {msg}");
     let spinner_style = ProgressStyle::default_bar().template("[{spinner}] {msg}");
